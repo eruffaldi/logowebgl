@@ -113,21 +113,23 @@
     };
 
     /**
-     * Cubes Syntax
+     * LOGO Syntax
 
-     pen color: Cb Cw Cr Cy Cp Cc
-     size: Sxy
+     pen color: Ccolor
+     	color codes: bwrypck
+     size: S#,#
      write: .
-     move: X+-
-     move: Yx
-     up: U=Y+1
-     pushpop: P1 p1
+     move: [X|Y|Z]#
+     directions [UDLRFB] lower moves half
+     pushpop position stack: [Pp]#
 
-     santa claus
-     Pp
-     CbS23.Z-2Y1S22.Y1Cw.Y1Cr.U.U.U.U.
-     PP			 
      */
+    // Santa Claus is Here. Anything else is ignored
+    var cmds = parseString("P0X2CkS2,3.Z-1Y1S2,2.Y1Cw.Y1Cr.U.U.U.U.p0P0X-2CkS2,3.Z-1Y1S2,2.Y1Cw.Y1Cr.U.U.U.U.p0Y8Z-1S8,4.UCwS10,6.US8,4Cr.UCk.FFS1,1Cy.BBUS8,4Cr.U.U.U\n" +
+        "P0S2,2Cw.US4,4.U.UCp.P1Z2S1,1.p1UP1Z-1S6,2Cp.p1P1Z1X-2S1,1Cp.RCb.RCp.RCb.RCp.p1US5,5Cw.US3,3Cr.US2,2.X1S2,1.U.X1.X1S1,1D.p0\n" +
+        "P0X4S2,2.RD.RD.RD.D.DrCwS1,2.RU.DRCwS3,2Cp.p0\n" +
+        "P0CrX-4S2,2.LU.LU.lDS1,2.DRCwS1,2.LU.DLCwS3,2Cp.p0\n")
+
     var controls;
     var timer = new Timer();
 
@@ -327,11 +329,6 @@
             });
         }
 
-        var cmds = parseString("P0X2CkS2,3.Z-1Y1S2,2.Y1Cw.Y1Cr.U.U.U.U.p0P0X-2CkS2,3.Z-1Y1S2,2.Y1Cw.Y1Cr.U.U.U.U.p0Y8Z-1S8,4.UCwS10,6.US8,4Cr.UCk.FFS1,1Cy.BBUS8,4Cr.U.U.U\n" +
-            "P0S2,2Cw.US4,4.U.UCp.P1Z2S1,1.p1UP1Z-1S6,2Cp.p1P1Z1X-2S1,1Cp.RCb.RCp.RCb.RCp.p1US5,5Cw.US3,3Cr.US2,2.X1S2,1.U.X1.X1S1,1D.p0\n" +
-            "P0X4S2,2.RD.RD.RD.D.DrCwS1,2.RU.DRCwS3,2Cp.p0\n" +
-            "P0CrX-4S2,2.LU.LU.lDS1,2.DRCwS1,2.LU.DLCwS3,2Cp.p0\n")
-
         var objects = []
             //console.log(cmds)
         var pos = [0, 0, 0]
@@ -421,20 +418,8 @@
         container.appendChild(renderer.domElement);
 
         composer = new THREE.EffectComposer(renderer);
-        //composer.renderTarget1.texture.format = THREE.RGBAFormat;
-        //composer.renderTarget2.texture.format = THREE.RGBAFormat;
-
-        //var clearPass = new THREE.ClearPass( backcolor  ,1.0);
-        //composer.addPass( clearPass );
-
 
         var renderPass = new THREE.RenderPass(scene, camera)
-            //renderPass.clear = false;
-            //renderPass.renderTargetX.texture.format = THREE.RGBAFormat;
-            //renderPass.renderTargetY.texture.format = THREE.RGBAFormat;
-            // clear color of RenderPass is inherited
-            //renderPass.autoClear = texture
-            //renderPass.renderToScreen = true
         composer.addPass(renderPass);
 
         outlinePass = new THREE.OutlinePass(new THREE.Vector2(window.innerWidth, window.innerHeight), scene, camera);
@@ -454,16 +439,13 @@
         composer.addPass(final);
 
 
-        /*var dragControls = new THREE.DragControls( objects, camera, renderer.domElement );
+        /*
+        var dragControls = new THREE.DragControls( objects, camera, renderer.domElement );
         dragControls.addEventListener( 'dragstart', function ( event ) { controls.enabled = false; } );
         dragControls.addEventListener( 'dragend', function ( event ) { controls.enabled = true; } );
         */
         stats = new Stats();
         container.appendChild(stats.dom);
-
-        //document.addEventListener( 'mousemove', onDocumentMouseMove, false );
-
-        //
 
         window.addEventListener('resize', onWindowResize, false);
 
@@ -503,58 +485,15 @@
         controls.update();
         stats.update();
 
-        // 				//base.add( object );												
         if (lasttime) {
             delta = time - lasttime
             timer.update(delta);
         }
         lasttime = time
-            // 
-
     }
 
     function render() {
-
-        /*
-        theta += 0.1;
-
-        camera.position.x = radius * Math.sin( THREE.Math.degToRad( theta ) );
-        camera.position.y = radius * Math.sin( THREE.Math.degToRad( theta ) );
-        camera.position.z = radius * Math.cos( THREE.Math.degToRad( theta ) );
-        camera.lookAt( scene.position );
-
-        camera.updateMatrixWorld();
-        */
-
-        /*
-        raycaster.setFromCamera( mouse, camera );
-
-        var intersects = raycaster.intersectObjects( scene.children );
-
-        if ( intersects.length > 0 ) {
-
-        	if ( INTERSECTED != intersects[ 0 ].object ) {
-
-        		if ( INTERSECTED ) INTERSECTED.material.emissive.setHex( INTERSECTED.currentHex );
-
-        		INTERSECTED = intersects[ 0 ].object;
-        		INTERSECTED.currentHex = INTERSECTED.material.emissive.getHex();
-        		INTERSECTED.material.emissive.setHex( 0xff0000 );
-
-        	}
-
-        } else {
-
-        	if ( INTERSECTED ) INTERSECTED.material.emissive.setHex( INTERSECTED.currentHex );
-
-        	INTERSECTED = null;
-
-        }
-        */
         composer.render();
-
-        //renderer.render( scene, camera );
-
     }
     </script>
 </body>
