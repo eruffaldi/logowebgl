@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>three.js webgl - symbolic cubes</title>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+		<style>
+			body {
+				font-family: Monospace;
+				background-color: #f0f0f0;
+				margin: 0px;
+				overflow: hidden;
+			}
+		</style>
+	</head>
+	<body>
+
+		<script src="three.min.js"></script>
+		<script src="DragControls.js"></script>
+		<script src="TrackballControls.js"></script>
+
+		<script src="EffectComposer.js"></script>
+		<script src="ShaderPass.js"></script>
+		<script src="CopyShader.js"></script>
+		<script src="OutlinePass.js"></script>		
+		<script src="ClearPass.js"></script>		
+		<script src="RenderPass.js"></script>
+		<script src="Timer.js"></script>
+
+		<script src="stats.min.js"></script>
+
+		<script>
+		THREE.ShaderTypes = {
+
+			'phongDiffuse' : {
+
+				uniforms: {
+
+					"uDirLightPos":	{ type: "v3", value: new THREE.Vector3() },
+					"uDirLightColor": { type: "c", value: new THREE.Color( 0xffffff ) },
+
+					"uMaterialColor":  { type: "c", value: new THREE.Color( 0xffffff ) },
+
+					uKd: {
+						type: "f",
+						value: 0.7
+					},
+					uBorder: {
+						type: "f",
+						value: 0.4
+					}
+				},
+
+				vertexShader: [
+
+					"varying vec3 vNormal;",
+					"varying vec3 vViewPosition;",
+
+					"void main() {",
+
+						"gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 );",
+						"vNormal = normalize( normalMatrix * normal );",
+						"vec4 mvPosition = modelViewMatrix * vec4( position, 1.0 );",
+						"vViewPosition = -mvPosition.xyz;",
+
+					"}"
+
+				].join("\n"),
+
+				fragmentShader: [
+
+					"uniform vec3 uMaterialColor;",
+
+					"uniform vec3 uDirLightPos;",
+					"uniform vec3 uDirLightColor;",
+
+					"uniform float uKd;",
+					"uniform float uBorder;",
+
+					"varying vec3 vNormal;",
+					"varying vec3 vViewPosition;",
+
+					"void main() {",
+
+						// compute direction to light
+						"vec4 lDirection = viewMatrix * vec4( uDirLightPos, 0.0 );",
+						"vec3 lVector = normalize( lDirection.xyz );",
+
+						// diffuse: N * L. Normal must be normalized, since it's interpolated.
+						"vec3 normal = normalize( vNormal );",
+						//was: "float diffuse = max( dot( normal, lVector ), 0.0);",
+						// solution
+						"float diffuse = dot( normal, lVector );",
+						"if ( diffuse > 0.6 ) { diffuse = 1.0; }",
+						"else if ( diffuse > -0.2 ) { diffuse = 0.7; }",
+						"else { diffuse = 0.3; }",
+
+						"gl_FragColor = vec4( uKd * uMaterialColor * uDirLightColor * diffuse, 1.0 );",
+
+					"}"
+
+				].join("\n")
+
+			}
+
+			};
+
+			/**
+			 * Cubes Syntax
+
+			 pen color: Cb Cw Cr Cy Cp Cc
+			 size: Sxy
+			 write: .
+			 move: X+-
+			 move: Yx
+			 up: U=Y+1
+			 pushpop: P1 p1
+
+			 santa claus
+			 Pp
+			 CbS23.Z-2Y1S22.Y1Cw.Y1Cr.U.U.U.U.
+			 PP			 
+			 */
+			 var controls;
+			 var timer = new Timer();
+
+			 function parseString(x)
+			 {
+			 	var re = /C([a-z])|[XYZ](-?[0-9])|S([0-9]+),([0-9]+)|[UDLRFBudrl]|\.|[Pp]([0-9])|J(-?[0.-9])(-?[.0-9])(-?[.0-9])/;
+			 	var rr = []
+			 	var motions = {D:[0,-1,0],U:[0,1,0],F:[0,0,1],B:[0,0,-1],R:[1.0,0,0],L:[-1.0,0,0]}
+			 	var motionk = "DUFBRL"
+			 	while(true)
+			 	{
+			 		var y = re.exec(x)
+			 		if(y == null)
+			 			break
+			 		var c0 = y[0][0]
+			 		var j = motionk.indexOf(c0.toUpperCase())
+			 		if(j >= 0)
+			 		{
+			 			var d = motions[motionk[j]]
+			 			var s = motionk[j] != c0 ? 0.5 : 1.0
+		 				rr.push({ action: "move", dir: [s*d[0],s*d[1],s*d[2]]})
+			 		}
+			 		else
+			 		{
+				 		switch(c0)
+				 		{
+				 			case "C":
+				 				rr.push({ action: "color", color: y[1]})
+				 				break
+				 			case "X":
+				 			case "Y":
+				 			case "Z":
+				 				var w = [0,0,0]
+				 				w[{X:0,Y:1,Z:2}[c0]] = parseFloat(y[2])
+				 				rr.push({ action: "move", dir: w})
+				 				break
+				 			case "S":
+				 				rr.push({ action: "size", size: [parseFloat(y[3]),1,parseFloat(y[4])]})
+				 				break
+				 			case ".":
+				 				rr.push({action:"write"})
+				 				break
+				 			case "P":
+				 				rr.push({ action: "push", slot: parseInt(y[5])})
+				 				break
+				 			case "p":
+				 				rr.push({ action: "pop", slot: parseInt(y[5])})
+				 				break
+				 			case "J":
+				 				rr.push({ action: "jump", pos: [parseFloat(6),parseFloat(7),parseFloat(8)]})
+				 				break
+				 		}
+				 	}
+			 		x = x.substr(y.index+y[0].length)
+			 	}
+			 	return rr
+
+			 }
+			var container, stats;
+			var camera, scene, raycaster, renderer,composer;
+
+			var mouse = new THREE.Vector2(), INTERSECTED;
+			var radius = 20, theta = 0;
+
+			init();
+			animate();
+
+			function createShaderMaterial(id, light) {
+
+				var shader = THREE.ShaderTypes[id];
+
+				var u = THREE.UniformsUtils.clone(shader.uniforms);
+
+				var vs = shader.vertexShader;
+				var fs = shader.fragmentShader;
+
+				var material = new THREE.ShaderMaterial({ uniforms: u, vertexShader: vs, fragmentShader: fs });
+
+				material.uniforms.uDirLightPos.value = light.position;
+				material.uniforms.uDirLightColor.value = light.color;
+
+				return material;
+
+			}
+
+
+			function init() {
+
+				container = document.createElement( 'div' );
+				document.body.appendChild( container );
+
+				var info = document.createElement( 'div' );
+				info.style.position = 'absolute';
+				info.style.top = '10px';
+				info.style.width = '100%';
+				info.style.textAlign = 'center';
+				info.innerHTML = '<a href="http://threejs.org" target="_blank">three.js</a> webgl - interactive cubes';
+				container.appendChild( info );
+
+				camera = new THREE.PerspectiveCamera( 70, window.innerWidth / window.innerHeight, 1, 10000 );
+				camera.position.z = 30;
+				
+				controls = new THREE.TrackballControls( camera );
+				controls.rotateSpeed = 4.0;
+				controls.zoomSpeed = 1.2;
+				controls.panSpeed = 0.8;
+				controls.noZoom = false;
+				controls.noPan = false;
+				controls.staticMoving = true;
+				controls.dynamicDampingFactor = 0.3;
+				controls.keys = [ 65, 83, 68 ];
+				controls.addEventListener( 'change', render );
+
+
+
+				scene = new THREE.Scene();
+				base = new THREE.Object3D();
+
+				var light = new THREE.DirectionalLight( 0xffffff, 1 );
+				light.position.set( 1, 1, 1 ).normalize();
+				scene.add( light );
+
+				var light2 = new THREE.DirectionalLight( 0x999999, 1 );
+				light2.position.set( -1, -1, -1 ).normalize();
+				scene.add( light2 );
+
+				function getRandomInt(min, max) {
+					    return Math.floor(Math.random() * (max - min + 1)) + min;
+				}
+				function getRandomArrayItem(a) {
+					return a[getRandomInt(0,a.length-1)]
+				}
+
+				var geometry = new THREE.BoxBufferGeometry( 1, 1, 1 );
+				geometry.computeBoundingBox(); 
+				geometry.center(); 
+				var colors = {}
+				colors["k"] = 0
+				colors["w"] = 0xffffff
+				colors["r"] = 0xFF0000
+				colors["g"] = 0x00FF00
+				colors["y"] = 0xFFFF00
+				colors["b"] = 0x0000FF
+				colors["c"] = 0x00FFFF
+				colors["p"] = 0xffc0cb
+				var colornames = Object.keys(colors);
+				var colorsmat = {}
+
+				// view-source:http://www.realtimerendering.com/erich/udacity/exercises/unit3_toon_solution3.html
+				var materialColor = new THREE.Color();
+				materialColor.setRGB(1.0, 0.8, 0.6);
+
+				for (var i = 0; i < colornames.length; i++)
+				{
+					var phongMaterial = createShaderMaterial("phongDiffuse", light);
+					var materialColor = new THREE.Color(colors[colornames[i]]);
+					phongMaterial.uniforms.uMaterialColor.value.copy(materialColor);
+					phongMaterial.side = THREE.DoubleSide;
+					phongMaterial.uniforms.uKd.value = 0.7;
+					phongMaterial.uniforms.uBorder.value = 0.6;
+					//colorsmat[colornames[i]] = phongMaterial;
+					colorsmat[colornames[i]] = new THREE.MeshLambertMaterial( { color: colors[colornames[i]] } ) ;
+				}
+			 	
+			 	var cmds = parseString("P0X2CkS2,3.Z-1Y1S2,2.Y1Cw.Y1Cr.U.U.U.U.p0P0X-2CkS2,3.Z-1Y1S2,2.Y1Cw.Y1Cr.U.U.U.U.p0Y8Z-1S8,4.UCwS10,6.US8,4Cr.UCk.FFS1,1Cy.BBUS8,4Cr.U.U.U\n"+
+			 		"P0S2,2Cw.US4,4.U.UCp.P1Z2S1,1.p1UP1Z-1S6,2Cp.p1P1Z1X-2S1,1Cp.RCb.RCp.RCb.RCp.p1US5,5Cw.US3,3Cr.US2,2.X1S2,1.U.X1.X1S1,1D.p0\n"+
+			 		"P0X4S2,2.RD.RD.RD.D.DrCwS1,2.RU.DRCwS3,2Cp.p0\n"+
+			 		"P0CrX-4S2,2.LU.LU.lDS1,2.DRCwS1,2.LU.DLCwS3,2Cp.p0\n")
+
+			 	var objects =[]
+			 	//console.log(cmds)
+			 	var pos = [0,0,0]
+			 	var size = [1,1,1]
+			 	var slots = {}
+			 	var color = colorsmat["k"]
+			 	var pendown = false
+				for ( var i = 0; i < cmds.length; i ++ ) {
+					var cmd = cmds[i]
+					var a = cmd.action
+					if(pendown || a == "write")
+					{
+						var object = new THREE.Mesh( geometry,color)
+
+						object.position.x = pos[0]
+						object.position.y = pos[1]
+						object.position.z = pos[2]
+
+						//object.rotation.x = Math.random() * 2 * Math.PI;
+						//object.rotation.y = Math.random() * 2 * Math.PI;
+						//object.rotation.z = Math.random() * 2 * Math.PI;
+
+						object.scale.x = size[0]
+						object.scale.y = size[1]
+						object.scale.z = size[2]
+
+						objects.push(object)
+					}
+					base.position.y = -10
+					scene.add(base)
+					switch(a)
+					{
+						case "write":
+							break
+						case "size":
+							size[0] = cmd.size[0]
+							size[1] = cmd.size[1]
+							size[2] = cmd.size[2]
+							break
+						case "move":
+							pos[0] += cmd.dir[0]
+							pos[1] += cmd.dir[1]
+							pos[2] += cmd.dir[2]
+							break
+						case "jump":
+							pos[0] = cmd.pos[0]
+							pos[1] = cmd.pos[1]
+							pos[2] = cmd.pos[2]
+							break
+						case "push":
+							slots[cmd.slot] = [pos[0],pos[1],pos[2]]
+							break
+						case "pop":
+							c = slots[cmd.slot]
+							if(c)
+							{
+								pos[0] = c[0]
+								pos[1] = c[1]
+								pos[2] = c[2]
+							}
+							break
+						case "color":
+							color = colorsmat[cmd.color]
+							break;
+					}
+
+				}
+
+				var intervalId;
+				intervalId = timer.setInterval(function ()
+					{
+						var cur = outlinePass.selectedObjects.length
+						if(cur < objects.length)
+						{
+							var o = objects[cur]
+							base.add(o)
+							outlinePass.selectedObjects.push(o)
+						}
+						else
+						{
+							timer.clearInterval(intervalId)
+						}
+					}, 100);
+
+				raycaster = new THREE.Raycaster();
+
+				renderer = new THREE.WebGLRenderer();
+				renderer.setClearColor( 0x777777, 1.0 ); // overridden by renderpass if 
+				renderer.autoClear = true
+				renderer.setPixelRatio( window.devicePixelRatio );
+				renderer.setSize( window.innerWidth, window.innerHeight );
+
+				renderer.sortObjects = false;
+				container.appendChild(renderer.domElement);
+
+				composer = new THREE.EffectComposer( renderer );
+				//composer.renderTarget1.texture.format = THREE.RGBAFormat;
+				//composer.renderTarget2.texture.format = THREE.RGBAFormat;
+
+				//var clearPass = new THREE.ClearPass( backcolor  ,1.0);
+				//composer.addPass( clearPass );
+				
+
+				var renderPass = new THREE.RenderPass( scene, camera)
+				//renderPass.clear = false;
+				//renderPass.renderTargetX.texture.format = THREE.RGBAFormat;
+				//renderPass.renderTargetY.texture.format = THREE.RGBAFormat;
+				// clear color of RenderPass is inherited
+				//renderPass.autoClear = texture
+				//renderPass.renderToScreen = true
+				composer.addPass( renderPass );
+
+				outlinePass = new THREE.OutlinePass( new THREE.Vector2(window.innerWidth, window.innerHeight), scene, camera);
+				//outlinePass.renderToScreen = true
+				outlinePass.selectedObjects = []
+				outlinePass.edgeGlow = 0.4
+				outlinePass.visibleEdgeColor.r = 1.0
+				outlinePass.visibleEdgeColor.g = 1.0
+				outlinePass.visibleEdgeColor.b = 1.0
+				outlinePass.pulsePeriod = 5
+				outlinePass.edgeThickness = 1
+				// default white
+				composer.addPass( outlinePass );
+
+				var final = new THREE.ShaderPass(THREE.CopyShader);
+				final.renderToScreen = true;
+				composer.addPass( final );
+
+				
+				/*var dragControls = new THREE.DragControls( objects, camera, renderer.domElement );
+				dragControls.addEventListener( 'dragstart', function ( event ) { controls.enabled = false; } );
+				dragControls.addEventListener( 'dragend', function ( event ) { controls.enabled = true; } );
+				*/
+				stats = new Stats();
+				container.appendChild( stats.dom );
+
+				//document.addEventListener( 'mousemove', onDocumentMouseMove, false );
+
+				//
+
+				window.addEventListener( 'resize', onWindowResize, false );
+
+			}
+
+			function onWindowResize() {
+
+				var width = window.innerWidth || 1;
+				var height = window.innerHeight || 1;
+				var devicePixelRatio = window.devicePixelRatio || 1;
+
+				camera.aspect = window.innerWidth / window.innerHeight;
+				camera.updateProjectionMatrix();
+
+				renderer.setSize( width, height );
+				composer.setSize( width, height );
+
+			}
+
+			function onDocumentMouseMove( event ) {
+
+				event.preventDefault();
+
+				mouse.x = ( event.clientX / window.innerWidth ) * 2 - 1;
+				mouse.y = - ( event.clientY / window.innerHeight ) * 2 + 1;
+
+			}
+
+			//
+			var lasttime;
+			function animate(time) {
+
+				requestAnimationFrame( animate );
+
+				render();
+				controls.update();
+				stats.update();
+
+				// 				//base.add( object );												
+				if(lasttime)
+				{
+					delta = time-lasttime
+				 timer.update(delta); 
+				}
+				lasttime = time
+				// 
+
+			}
+
+			function render() {
+
+				/*
+				theta += 0.1;
+
+				camera.position.x = radius * Math.sin( THREE.Math.degToRad( theta ) );
+				camera.position.y = radius * Math.sin( THREE.Math.degToRad( theta ) );
+				camera.position.z = radius * Math.cos( THREE.Math.degToRad( theta ) );
+				camera.lookAt( scene.position );
+
+				camera.updateMatrixWorld();
+				*/
+
+				/*
+				raycaster.setFromCamera( mouse, camera );
+
+				var intersects = raycaster.intersectObjects( scene.children );
+
+				if ( intersects.length > 0 ) {
+
+					if ( INTERSECTED != intersects[ 0 ].object ) {
+
+						if ( INTERSECTED ) INTERSECTED.material.emissive.setHex( INTERSECTED.currentHex );
+
+						INTERSECTED = intersects[ 0 ].object;
+						INTERSECTED.currentHex = INTERSECTED.material.emissive.getHex();
+						INTERSECTED.material.emissive.setHex( 0xff0000 );
+
+					}
+
+				} else {
+
+					if ( INTERSECTED ) INTERSECTED.material.emissive.setHex( INTERSECTED.currentHex );
+
+					INTERSECTED = null;
+
+				}
+				*/
+				composer.render();
+
+				//renderer.render( scene, camera );
+
+			}
+
+		</script>
+
+	</body>
+</html>
