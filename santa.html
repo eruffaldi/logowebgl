@@ -16,6 +16,9 @@
 </head>
 
 <body>
+    <audio loop="loop" id="ohoh" >
+        <source src="ohoh.mp3" type="audio/mpeg">
+    </audio>
     <script src="three.min.js"></script>
     <script src="DragControls.js"></script>
     <script src="TrackballControls.js"></script>
@@ -460,7 +463,11 @@
                 o.visible = true
                 outlinePass.selectedObjects.push(o)
             } else {
+                // start oh oh
+                document.getElementById("ohoh").play()
+                // clear build up timer
                 timer.clearInterval(intervalId)
+                // maybe start arm animation
             }
         }, 100);
 
