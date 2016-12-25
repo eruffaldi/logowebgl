@@ -124,17 +124,22 @@
      pushpop position stack: [Pp]#
 
      */
+     var head = "S2,2Cw.US4,4.U.UCp.P8Z2S1,1.p8UP8Z-1S6,2Cp.p8P8Z1X-2S1,1Cp.RCb.RCp.RCb.RCp.p8US5,5Cw.US3,3Cr.US2,2.X1S2,1.U.X1.X1S1,1D."
+     var left = "X4A9S2,2.RD.RD.RD.D.DrCwS1,2.RU.DRCwS3,2Cp.a9\n"
+     var right = "CrX-4S2,2.LU.LU.lDS1,2.DRCwS1,2.LU.DLCwS3,2Cp.\n"
+     var torso = "Y8Z-1S8,4.UCwS10,6.US8,4Cr.UCk.FFS1,1Cy.BBUS8,4Cr.U.U.U"
+     var rightleg = "X-2CkS2,3.Z-1Y1S2,2.Y1Cw.Y1Cr.U.U.U.U."
+     var leftleg = "X2CkS2,3.Z-1Y1S2,2.Y1Cw.Y1Cr.U.U.U.U."
     // Santa Claus is Here. Anything else is ignored
-    var cmds = parseString("P0X2CkS2,3.Z-1Y1S2,2.Y1Cw.Y1Cr.U.U.U.U.p0P0X-2CkS2,3.Z-1Y1S2,2.Y1Cw.Y1Cr.U.U.U.U.p0Y8Z-1S8,4.UCwS10,6.US8,4Cr.UCk.FFS1,1Cy.BBUS8,4Cr.U.U.U\n" +
-        "P0S2,2Cw.US4,4.U.UCp.P1Z2S1,1.p1UP1Z-1S6,2Cp.p1P1Z1X-2S1,1Cp.RCb.RCp.RCb.RCp.p1US5,5Cw.US3,3Cr.US2,2.X1S2,1.U.X1.X1S1,1D.p0\n" +
-        "P0X4S2,2.RD.RD.RD.D.DrCwS1,2.RU.DRCwS3,2Cp.p0\n" +
-        "P0CrX-4S2,2.LU.LU.lDS1,2.DRCwS1,2.LU.DLCwS3,2Cp.p0\n")
+    var cmds = parseString("A0"+leftleg+"a0A1"+rightleg+"a1A2"+torso+"A4A5"+right+"a5A6" + left + "a6A7"+head+"a7"
+        )
 
     var controls;
     var timer = new Timer();
-
+    var slots = {}
+        
     function parseString(x) {
-        var re = /C([a-z])|[XYZ](-?[0-9])|S([0-9]+),([0-9]+)|[UDLRFBudrl]|\.|[Pp]([0-9])|J(-?[0.-9])(-?[.0-9])(-?[.0-9])/;
+        var re = /C([a-z])|[XYZ](-?[0-9])|S([0-9]+),([0-9]+)|[UDLRFBudrl]|\.|[AaPp]([0-9])|J(-?[0.-9])(-?[.0-9])(-?[.0-9])/;
         var rr = []
         var motions = {
             D: [0, -1, 0],
@@ -191,6 +196,18 @@
                             action: "write"
                         })
                         break
+                    case "A":
+                        rr.push({
+                            action: "apush",
+                            slot: parseInt(y[5])
+                        })
+                        break
+                    case "a":
+                        rr.push({
+                            action: "apop",
+                            slot: parseInt(y[5])
+                        })
+                        break
                     case "P":
                         rr.push({
                             action: "push",
@@ -202,7 +219,7 @@
                             action: "pop",
                             slot: parseInt(y[5])
                         })
-                        break
+                        break                    
                     case "J":
                         rr.push({
                             action: "jump",
@@ -332,10 +349,12 @@
         var objects = []
             //console.log(cmds)
         var pos = [0, 0, 0]
+        var aslots = {}
         var size = [1, 1, 1]
-        var slots = {}
         var color = colorsmat["k"]
         var pendown = false
+        var current = base
+        base.name = "root"
         for (var i = 0; i < cmds.length; i++) {
             var cmd = cmds[i]
             var a = cmd.action
@@ -353,8 +372,10 @@
                 object.scale.x = size[0]
                 object.scale.y = size[1]
                 object.scale.z = size[2]
-
+                object.visible = false
+                object.name = "my"+i
                 objects.push(object)
+                current.add(object)                
             }
             base.position.y = -10
             scene.add(base)
@@ -376,30 +397,67 @@
                     pos[1] = cmd.pos[1]
                     pos[2] = cmd.pos[2]
                     break
-                case "push":
-                    slots[cmd.slot] = [pos[0], pos[1], pos[2]]
+                case "apush":
+                    // create 
+                    c = slots[cmd.slot]
+                    if(!c)
+                    {
+                        c = new THREE.Object3D()
+                        c.name = "slot"+cmd.slot
+                        c.position.x = pos[0]
+                        c.position.y = pos[1]
+                        c.position.z = pos[2]
+                        current.add(c)
+                        slots[cmd.slot] = c
+                        console.log("new slot",c.name,"child of",current.name)
+                    }
+                    else
+                    {
+                        console.log("activate slot",c.name,"child of",c.parent.name)
+                    }
+                    current = c
+                    pos = [0,0,0]
                     break
-                case "pop":
+                case "apop":
+                    // go to parent of slot, in origin
                     c = slots[cmd.slot]
                     if (c) {
+                        current = c.parent
+                        console.log("reactivate slot",current.name)
+                    }
+                    pos = [0,0,0]
+                    //pos[0] = c[0]
+                    //pos[1] = c[1]
+                    //pos[2] = c[2]
+                    break
+                case "push":
+                    // save position
+                    aslots[cmd.slot] = [pos[0],pos[1],pos[2]]
+                    break
+                case "pop":
+                    // recover position
+                    c = aslots[cmd.slot]
+                    if(c)
+                    {
                         pos[0] = c[0]
                         pos[1] = c[1]
                         pos[2] = c[2]
                     }
-                    break
+                    break;
                 case "color":
                     color = colorsmat[cmd.color]
                     break;
             }
 
         }
+        scene.updateMatrixWorld ()
 
         var intervalId;
         intervalId = timer.setInterval(function() {
             var cur = outlinePass.selectedObjects.length
             if (cur < objects.length) {
                 var o = objects[cur]
-                base.add(o)
+                o.visible = true
                 outlinePass.selectedObjects.push(o)
             } else {
                 timer.clearInterval(intervalId)
@@ -476,7 +534,9 @@
 
     //
     var lasttime;
-
+    var rdir = 1.0
+    var maxval = 80*Math.PI/180.0
+    var minval = -30*Math.PI/180.0
     function animate(time) {
 
         requestAnimationFrame(animate);
@@ -488,6 +548,18 @@
         if (lasttime) {
             delta = time - lasttime
             timer.update(delta);
+            var r = slots[9].rotation.z + rdir*delta*0.001
+            if(r > maxval)
+            {
+                r = maxval
+                rdir = -rdir
+            }
+            else if (r < minval)
+            {
+                r = minval
+                rdir = -rdir
+            }
+            slots[9].rotation.z = r
         }
         lasttime = time
     }
