@@ -21,6 +21,7 @@
     </audio>
     <script src="three.min.js"></script>
     <script src="DragControls.js"></script>
+    <script src="CCapture.all.min.js"></script>
     <script src="TrackballControls.js"></script>
     <script src="EffectComposer.js"></script>
     <script src="ShaderPass.js"></script>
@@ -272,8 +273,37 @@
 
     function init() {
 
+
         container = document.createElement('div');
         document.body.appendChild(container);
+
+        control = new function () {
+                    this.rotationSpeed = 0.005;
+                    this.scale = 1;
+                    this.saveMovie = function () {
+                        var videoUrl = capturer.save();
+                        var link = document.createElement("a");
+                        link.download = 'video.gif';
+                        link.href = videoUrl;
+                        link.click();
+                    };
+                };
+        //addControls(control);
+
+        // capture code
+        capturer = new CCapture({
+            framerate: 20,
+            format: "gif",
+            workersPath: 'js/',
+            verbose: true
+        });
+        // capturer.start();
+
+        function addControls(controlObject) 
+        {
+            var gui = new dat.GUI();
+            gui.add(controlObject, 'saveMovie');
+        }
 
         var info = document.createElement('div');
         info.style.position = 'absolute';
@@ -546,9 +576,12 @@
     var minval = -30*Math.PI/180.0
     function animate(time) {
 
+
         requestAnimationFrame(animate);
 
+        capturer.capture(renderer.domElement);
         render();
+
         controls.update();
         stats.update();
 
